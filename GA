@@ -1,0 +1,116 @@
+import random
+import copy
+import numpy as np
+import pandas as pd 
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+import pickle
+from sklearn.neural_network import MLPRegressor
+
+class GA():
+    def __init__(self,chrom,bound,model,sizepop=50,pcross=0.3,pmutation=0.05,iteration=200):
+        self.chrom=np.ones((1,chrom))
+        self.bound=bound
+        self.model=model
+        self.sizepop=sizepop
+        self.pcross=pcross
+        self.pmutation=pmutation
+        self.iteration=iteration
+
+    def code(self):
+        pick=np.random.uniform(0,1,(1,self.chrom.shape[1]))
+        ret=bound[:,0]+(self.bound[:,1]-self.bound[:,0])*pick
+        return ret
+
+    def fitness(self,individuals):
+        Y_pred =self.model.predict([individuals])
+        return  Y_pred
+
+    def select(self,individuals,individuals_fitness):
+        #计算每个个体被选择的概率
+        sumfitness=sum(individuals_fitness[0,:])
+        p_fitness=np.zeros((1,self.sizepop))
+        q_fitness=np.zeros((1,self.sizepop))
+        for i in range(self.sizepop):
+            p_fitness[0,i]=individuals_fitness[0,i]/sumfitness
+        #累积概率
+        for j in range(self.sizepop):
+            q_fitness[0,j]=sum(p_fitness[0,0:j+1])
+        #选择
+        individuals_new=individuals.copy()
+        for i in range(self.sizepop):
+            rand=random.uniform(0,1)
+            for j in range(self.sizepop):
+                if q_fitness[0,j-1]<rand and  q_fitness[0,j]>rand:
+                    individuals_new[i,:]=individuals[j,:]
+        return individuals_new
+
+    def cross(self,individuals):  
+        i=0
+        while i<=self.sizepop:
+            #决定是否变异
+            r=random.uniform(0,1)
+            if r>self.pcross:
+                continue
+            #选择交叉的个体
+            person1=random.randint(0, individuals.shape[0]-1)
+            person2=random.randint(0, individuals.shape[0]-1)
+            while person1 == person2:
+                person1=random.randint(0, individuals.shape[0]-1)
+                person2=random.randint(0, individuals.shape[0]-1)
+            #交叉位置
+            point1 = random.randint(0, individuals.shape[1])
+            point2 = random.randint(0,individuals.shape[1])
+            while point1 > point2 or point1 == point2:
+                point1 = random.randint(0, individuals.shape[1])
+                point2 = random.randint(0,individuals.shape[1]) 
+            rand=random.uniform(0,1)
+            individuals[person1,point1:point2],individuals[person2,point1:point2]=\
+            rand*individuals[person1,point1:point2]+(1-rand)*individuals[person1,point1:point2],\
+            rand*individuals[person2,point1:point2]+(1-rand)*individuals[person2,point1:point2]
+            i=i+1
+        return individuals
+
+    def mutation(self,individuals):
+        for i in range(self.sizepop):
+            for j in range(individuals.shape[1]):  
+                r=random.uniform(0,1)
+                if r>self.pmutation:
+                    continue
+                individuals[i,j]=random.uniform(self.bound[j,0],self.bound[j,1])
+        return individuals
+
+    def optimation(self):
+        #产生初始种群
+        individuals=np.zeros(shape=(self.sizepop,self.chrom.shape[1]))
+        individuals_fitness=np.zeros(shape=(1,self.sizepop))
+        for i in range(self.sizepop):
+            individuals[i,:]=GA.code(self) 
+            individuals_fitness[0,i]=GA.fitness(self,individuals[i,:])
+        
+
+        #迭代寻优
+        for i in range(self.iteration):
+        
+            #选择
+            individuals=GA.select(self,individuals,individuals_fitness)
+            #交叉
+            individuals=GA.cross(self,individuals)
+            #变异
+            individuals=GA.mutation(self,individuals)
+        
+            bestfitness=0
+            newbestfitness=0
+            bestchrom=np.zeros(shape=(1,self.chrom.shape[1]))
+            newbestchrom=np.zeros(shape=(1,self.chrom.shape[1]))
+            for j in range(self.sizepop):
+                individuals_fitness[0,j]=GA.fitness(self,individuals[j,:])
+                if newbestfitness<individuals_fitness[0,j]:
+                    newbestfitness=individuals_fitness[0,j]
+                    newbestchrom[0,:]=individuals[j,:]
+            if bestfitness<newbestfitness:
+                bestfitness=newbestfitness
+                bestchrom[0,:]=newbestchrom[0,:]
+        best_chrom=bestchrom[0,:]
+        return best_chrom,1/bestfitness
+
